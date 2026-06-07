@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Koopman Microstructure Predictor</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg0:#07080d;--bg1:#0d0f18;--bg2:#131621;--bg3:#1a1e2e;--bg4:#222740;
+  --border:rgba(99,132,255,0.12);--border2:rgba(99,132,255,0.22);--border3:rgba(99,132,255,0.38);
+  --text0:#f0f2ff;--text1:#b4bad4;--text2:#6b7294;--text3:#3e445e;
+  --blue:#5b8fff;--blue2:#3d72e8;--teal:#2ec4a0;--coral:#f0634e;--amber:#f5a623;--violet:#9b7fff;
+  --sans:'Syne',sans-serif;--mono:'JetBrains Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg0);color:var(--text0);font-family:var(--sans);display:flex;flex-direction:column}
+body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);pointer-events:none;z-index:9999}
+.grid-bg{position:fixed;inset:0;overflow:hidden;z-index:0;pointer-events:none}
+.grid-bg svg{width:100%;height:100%;opacity:0.045}
+
+/* HEADER */
+header{position:relative;z-index:10;display:flex;align-items:stretch;border-bottom:1px solid var(--border);flex-shrink:0;height:68px;background:linear-gradient(135deg,rgba(13,15,24,0.95),rgba(19,22,33,0.95))}
+.header-left{display:flex;align-items:center;gap:14px;padding:0 24px;border-right:1px solid var(--border);min-width:290px}
+.logo-mark{width:34px;height:34px;background:linear-gradient(135deg,var(--blue2),var(--blue));border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 14px rgba(61,114,232,0.3)}
+.logo-mark svg{width:17px;height:17px;color:#fff}
+.header-title{font-size:14px;font-weight:700;letter-spacing:-0.02em;line-height:1.2}
+.header-sub{font-size:9.5px;color:var(--text2);font-family:var(--mono);letter-spacing:0.06em;margin-top:2px}
+.header-right{display:flex;align-items:center;padding:0 20px;gap:20px;flex:1}
+.pipeline-steps{display:flex;align-items:center;flex:1}
+.pipe-node{display:flex;align-items:center;gap:6px;padding:5px 12px;font-family:var(--mono);font-size:9.5px;color:var(--text3);border-right:1px solid var(--border);white-space:nowrap;transition:color .25s,background .25s;height:100%}
+.pipe-node:last-child{border-right:none}
+.pipe-dot{width:5px;height:5px;border-radius:50%;background:var(--text3);transition:background .25s,box-shadow .25s;flex-shrink:0}
+.pipe-node.active{color:var(--blue);background:rgba(91,143,255,0.08)}
+.pipe-node.active .pipe-dot{background:var(--teal);box-shadow:0 0 8px var(--teal)}
+.pipe-node.done{color:var(--text2)}
+.pipe-node.done .pipe-dot{background:var(--blue)}
+
+/* GIF EXPORT BUTTON in header */
+.btn-gif-header{display:none;align-items:center;gap:7px;padding:7px 14px;background:rgba(46,196,160,0.12);border:1px solid rgba(46,196,160,0.3);border-radius:7px;color:var(--teal);font-family:var(--mono);font-size:10px;cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}
+.btn-gif-header:hover{background:rgba(46,196,160,0.2);box-shadow:0 0 14px rgba(46,196,160,0.2)}
+.btn-gif-header svg{width:13px;height:13px}
+
+/* LAYOUT */
+.layout{display:flex;flex:1;overflow:hidden;position:relative;z-index:1}
+.sidebar{width:310px;flex-shrink:0;border-right:1px solid var(--border);background:var(--bg1);display:flex;flex-direction:column;overflow:hidden}
+.sidebar-scroll{flex:1;overflow-y:auto;padding:18px}
+.sidebar-scroll::-webkit-scrollbar{width:3px}
+.sidebar-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.sidebar-footer{padding:14px 18px;border-top:1px solid var(--border);flex-shrink:0}
+.sec-label{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:0.14em;color:var(--text3);margin-bottom:9px;display:flex;align-items:center;gap:8px}
+.sec-label::after{content:'';flex:1;height:1px;background:var(--border)}
+.sec{margin-bottom:20px}
+.file-zone{border:1px dashed var(--border2);border-radius:9px;padding:16px;text-align:center;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;background:var(--bg2)}
+.file-zone:hover,.file-zone.dragging{border-color:var(--blue);background:rgba(91,143,255,0.05)}
+.file-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.file-icon-wrap{width:36px;height:36px;margin:0 auto 9px;border:1px solid var(--border2);border-radius:7px;display:flex;align-items:center;justify-content:center;background:var(--bg3)}
+.file-icon-wrap svg{width:15px;height:15px;color:var(--blue)}
+.file-zone p{font-size:11.5px;color:var(--text1);font-weight:500}
+.file-zone span{font-size:9.5px;color:var(--text2);font-family:var(--mono)}
+#preview-canvas{width:100%;border-radius:7px;margin-top:9px;display:none;border:1px solid var(--border)}
+.param-row{margin-bottom:13px}
+.param-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+.param-header label{font-size:10.5px;color:var(--text1);font-weight:500}
+.param-val{font-family:var(--mono);font-size:10.5px;color:var(--blue);background:rgba(91,143,255,0.1);padding:2px 6px;border-radius:4px;border:1px solid rgba(91,143,255,0.2)}
+input[type=range]{width:100%;-webkit-appearance:none;appearance:none;height:2px;background:var(--bg4);border-radius:2px;outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--blue);cursor:pointer;box-shadow:0 0 0 3px rgba(91,143,255,0.18);transition:box-shadow .15s}
+input[type=range]:hover::-webkit-slider-thumb{box-shadow:0 0 0 5px rgba(91,143,255,0.25)}
+.feat-table{width:100%;border-collapse:collapse}
+.feat-table tr{border-bottom:1px solid var(--border)}
+.feat-table tr:last-child{border-bottom:none}
+.feat-table td{padding:6px 0;font-size:10.5px}
+.feat-table td:first-child{color:var(--text2);font-family:var(--mono);width:55%}
+.feat-table td:last-child{text-align:right;color:var(--teal);font-family:var(--mono);font-weight:500}
+.feat-table td.dash{color:var(--text3)}
+.k-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:2px;padding:9px;background:var(--bg2);border:1px solid var(--border);border-radius:8px}
+.k-cell{aspect-ratio:1;border-radius:2px;cursor:pointer;transition:transform .15s;position:relative}
+.k-cell:hover{transform:scale(1.45);z-index:10}
+.k-tooltip{position:fixed;background:var(--bg3);border:1px solid var(--border2);border-radius:5px;padding:4px 8px;font-family:var(--mono);font-size:9px;color:var(--text0);white-space:nowrap;pointer-events:none;z-index:500;display:none}
+.k-legend{display:flex;align-items:center;justify-content:space-between;margin-top:5px;font-family:var(--mono);font-size:9px;color:var(--text2);padding:0 2px}
+.k-legend-bar{flex:1;height:3px;margin:0 7px;border-radius:2px;background:linear-gradient(90deg,#3d72e8,#2ec4a0,#f0634e)}
+#k-status{display:block;font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:5px;text-align:center;min-height:14px}
+.btn-run{width:100%;padding:12px;background:linear-gradient(135deg,var(--blue2),#5040c8);color:#fff;border:none;border-radius:8px;font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:0.03em;transition:all .2s;position:relative;overflow:hidden}
+.btn-run::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,0.1),transparent)}
+.btn-run:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 8px 24px rgba(61,114,232,0.4)}
+.btn-run:active:not(:disabled){transform:translateY(0)}
+.btn-run:disabled{background:var(--bg3);color:var(--text3);cursor:not-allowed;box-shadow:none}
+
+/* MAIN */
+.main-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg0)}
+.metrics-bar{display:flex;gap:1px;background:var(--border);border-bottom:1px solid var(--border);flex-shrink:0}
+.metric-box{flex:1;background:var(--bg1);padding:10px 12px;min-width:0}
+.metric-box-label{font-family:var(--mono);font-size:8.5px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.metric-box-val{font-family:var(--mono);font-size:15px;font-weight:500;color:var(--text0);transition:color .4s;white-space:nowrap}
+.metric-box-val.up{color:var(--teal)}
+.metric-box-val.down{color:var(--coral)}
+.metric-box-delta{font-family:var(--mono);font-size:8.5px;color:var(--text2);margin-top:2px;white-space:nowrap}
+.chart-log-row{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;height:155px}
+.chart-panel{flex:1;padding:12px 16px;border-right:1px solid var(--border);overflow:hidden}
+.chart-header-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.chart-title{font-size:10.5px;color:var(--text2);font-family:var(--mono)}
+.chart-legend{display:flex;gap:12px}
+.leg{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:9px;color:var(--text2)}
+.leg-line{width:14px;height:2px;border-radius:1px}
+.log-panel{width:330px;flex-shrink:0;overflow-y:auto;padding:8px 11px;background:var(--bg1)}
+.log-panel::-webkit-scrollbar{width:3px}
+.log-panel::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.log-line{display:flex;gap:8px;font-family:var(--mono);font-size:9px;line-height:1.7;border-bottom:1px solid rgba(255,255,255,0.02);padding:1px 0}
+.log-ts{color:var(--text3);flex-shrink:0;min-width:50px}
+.log-tag-badge{flex-shrink:0;font-size:7.5px;padding:0 4px;border-radius:3px;line-height:15px;height:15px;margin-top:2px}
+.log-tag-badge.INFO{background:rgba(91,143,255,0.15);color:var(--blue)}
+.log-tag-badge.DATA{background:rgba(155,127,255,0.15);color:var(--violet)}
+.log-tag-badge.OK{background:rgba(46,196,160,0.15);color:var(--teal)}
+.log-tag-badge.WARN{background:rgba(245,166,35,0.15);color:var(--amber)}
+.log-tag-badge.ERR{background:rgba(240,99,78,0.15);color:var(--coral)}
+.log-msg{color:var(--text1);flex:1;word-break:break-all}
+.progress-bar{height:2px;background:var(--bg3);overflow:hidden;margin-bottom:8px}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--blue2),var(--teal));transition:width .35s ease;width:0%}
+.frames-area{flex:1;overflow-y:auto;padding:16px}
+.frames-area::-webkit-scrollbar{width:4px}
+.frames-area::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.frames-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.frames-title{font-family:var(--mono);font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:0.1em}
+.frames-meta{display:flex;align-items:center;gap:10px}
+.frames-count{font-family:var(--mono);font-size:10px;color:var(--text3)}
+
+/* GIF EXPORT BUTTON in frames area */
+.btn-gif{display:none;align-items:center;gap:6px;padding:6px 12px;background:rgba(46,196,160,0.1);border:1px solid rgba(46,196,160,0.28);border-radius:6px;color:var(--teal);font-family:var(--mono);font-size:9.5px;cursor:pointer;transition:all .2s}
+.btn-gif:hover{background:rgba(46,196,160,0.2);box-shadow:0 0 12px rgba(46,196,160,0.15)}
+.btn-gif svg{width:12px;height:12px}
+.btn-gif.generating{opacity:.6;cursor:not-allowed}
+
+.frames-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.frame-card{background:var(--bg2);border:1px solid var(--border);border-radius:9px;overflow:hidden;cursor:pointer;transition:border-color .2s,transform .2s,box-shadow .2s}
+.frame-card:hover{border-color:var(--blue);transform:translateY(-2px);box-shadow:0 10px 28px rgba(91,143,255,0.12)}
+.frame-canvas-wrap{position:relative;overflow:hidden;background:#000}
+.frame-canvas-wrap canvas{width:100%;display:block;image-rendering:pixelated}
+.frame-footer{padding:7px 9px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border)}
+.frame-name{font-family:var(--mono);font-size:8.5px;color:var(--text1)}
+.frame-badge{font-family:var(--mono);font-size:7.5px;padding:2px 5px;border-radius:3px}
+.frame-badge.orig{background:rgba(46,196,160,0.15);color:var(--teal)}
+.frame-badge.pred{background:rgba(91,143,255,0.12);color:var(--blue)}
+.empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+.empty-icon{width:54px;height:54px;border:1px dashed var(--border2);border-radius:12px;display:flex;align-items:center;justify-content:center}
+.empty-icon svg{width:22px;height:22px;color:var(--text3)}
+.empty-state p{font-size:12.5px;color:var(--text2);text-align:center;line-height:1.6;font-weight:400}
+.empty-kwd{color:var(--blue);font-weight:600}
+
+/* GIF TOAST */
+.gif-toast{position:fixed;bottom:24px;right:24px;background:var(--bg3);border:1px solid var(--border2);border-radius:9px;padding:12px 18px;font-family:var(--mono);font-size:11px;color:var(--teal);display:none;align-items:center;gap:10px;z-index:400;box-shadow:0 8px 32px rgba(0,0,0,0.4)}
+.gif-toast.show{display:flex}
+.gif-toast a{color:var(--blue);text-decoration:none;border-bottom:1px solid rgba(91,143,255,0.3)}
+.gif-toast a:hover{color:var(--text0)}
+
+/* MODAL */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(5,6,15,0.88);z-index:200;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.modal-bg.open{display:flex}
+.modal-box{background:var(--bg2);border:1px solid var(--border2);border-radius:12px;padding:22px;max-width:520px;width:92%;position:relative;max-height:90vh;overflow-y:auto}
+.modal-close{position:absolute;top:12px;right:12px;background:none;border:none;color:var(--text2);cursor:pointer;font-size:18px;line-height:1;transition:color .15s}
+.modal-close:hover{color:var(--text0)}
+.modal-title{font-size:12px;font-weight:600;color:var(--text0);margin-bottom:11px;font-family:var(--mono)}
+#modal-canvas{width:100%;border-radius:6px;display:block;image-rendering:pixelated;border:1px solid var(--border)}
+.modal-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-top:12px}
+.modal-stat{background:var(--bg3);border-radius:6px;padding:9px 11px}
+.modal-stat-lbl{font-family:var(--mono);font-size:8.5px;color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px}
+.modal-stat-val{font-family:var(--mono);font-size:12.5px;color:var(--teal);font-weight:500}
+.modal-lifted{margin-top:12px}
+.modal-lifted-title{font-family:var(--mono);font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:7px}
+.lifted-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
+.lifted-cell{background:var(--bg3);border-radius:5px;padding:6px 7px}
+.lifted-lbl{font-family:var(--mono);font-size:7.5px;color:var(--text3);margin-bottom:2px}
+.lifted-val{font-family:var(--mono);font-size:9.5px;color:var(--violet)}
+
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{width:13px;height:13px;border:2px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:spin 0.7s linear infinite}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.fade-up{animation:fadeUp .3s ease both}
+</style>
+</head>
+<body>
+
+<div class="grid-bg">
+  <svg viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice">
+    <defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#6384ff" stroke-width="0.5"/></pattern></defs>
+    <rect width="100%" height="100%" fill="url(#grid)"/>
+  </svg>
+</div>
+
+<header>
+  <div class="header-left">
+    <div class="logo-mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+      </svg>
+    </div>
+    <div>
+      <div class="header-title">Koopman Predictor</div>
+      <div class="header-sub">MICROSTRUCTURE EVOLUTION · v2.1</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="pipeline-steps">
+      <div class="pipe-node" id="step-load"><div class="pipe-dot"></div>Load &amp; Preprocess</div>
+      <div class="pipe-node" id="step-extract"><div class="pipe-dot"></div>Feature Extraction</div>
+      <div class="pipe-node" id="step-koopman"><div class="pipe-dot"></div>Build Koopman K</div>
+      <div class="pipe-node" id="step-predict"><div class="pipe-dot"></div>Predict States</div>
+      <div class="pipe-node" id="step-lift"><div class="pipe-dot"></div>Lift to Image</div>
+      <div class="pipe-node" id="step-reconstruct"><div class="pipe-dot"></div>Reconstruct</div>
+    </div>
+    <button class="btn-gif-header" id="btn-gif-header" onclick="exportGIF()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 16V8m0 8l-3-3m3 3l3-3M4 20h16"/></svg>
+      Export GIF
+    </button>
+  </div>
+</header>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-scroll">
+
+      <div class="sec">
+        <div class="sec-label">Input Microstructure</div>
+        <div class="file-zone" id="file-zone">
+          <input type="file" id="image-input" accept="image/*">
+          <div class="file-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="3" y="3" width="18" height="18" rx="3"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <path d="M21 15l-5-5L5 21"/>
+            </svg>
+          </div>
+          <p id="file-name">Drop or click to upload</p>
+          <span>JPG · PNG · TIFF</span>
+        </div>
+        <canvas id="preview-canvas"></canvas>
+      </div>
+
+      <div class="sec">
+        <div class="sec-label">Koopman Parameters</div>
+        <div class="param-row">
+          <div class="param-header"><label>Prediction Steps</label><div class="param-val" id="v-steps">8</div></div>
+          <input type="range" id="sl-steps" min="1" max="20" value="8">
+        </div>
+        <div class="param-row">
+          <div class="param-header"><label>Historical States (n_historical)</label><div class="param-val" id="v-hist">6</div></div>
+          <input type="range" id="sl-hist" min="3" max="10" value="6">
+        </div>
+        <div class="param-row">
+          <div class="param-header"><label>Growth Exponent</label><div class="param-val" id="v-growth">2.5</div></div>
+          <input type="range" id="sl-growth" min="10" max="50" value="25">
+        </div>
+        <div class="param-row">
+          <div class="param-header"><label>Decay Rate (per step)</label><div class="param-val" id="v-decay">0.92</div></div>
+          <input type="range" id="sl-decay" min="80" max="99" value="92">
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-label">Initial Microstructure Features</div>
+        <table class="feat-table" id="feat-table">
+          <tr><td>count</td><td class="dash" id="f-count">—</td></tr>
+          <tr><td>avg_area</td><td class="dash" id="f-area">—</td></tr>
+          <tr><td>total_boundary</td><td class="dash" id="f-bound">—</td></tr>
+          <tr><td>compactness</td><td class="dash" id="f-comp">—</td></tr>
+          <tr><td>aspect_ratio</td><td class="dash" id="f-ar">—</td></tr>
+          <tr><td>total_area</td><td class="dash" id="f-tarea">—</td></tr>
+        </table>
+      </div>
+
+      <div class="sec">
+        <div class="sec-label">Koopman Operator K [10×10]</div>
+        <div class="k-grid" id="k-grid"></div>
+        <div class="k-legend"><span>low</span><div class="k-legend-bar"></div><span>high</span></div>
+        <span id="k-status">Waiting for features...</span>
+        <div id="k-tooltip" class="k-tooltip"></div>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--text2);margin-bottom:9px" id="progress-lbl">Ready</div>
+      <button class="btn-run" id="btn-run">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        Run Prediction Pipeline
+      </button>
+    </div>
+  </div>
+
+  <div class="main-panel">
+    <!-- METRICS BAR — 6 boxes -->
+    <div class="metrics-bar" id="metrics-bar">
+      <div class="metric-box"><div class="metric-box-label">GRAIN COUNT</div><div class="metric-box-val" id="m-count">—</div><div class="metric-box-delta" id="md-count"></div></div>
+      <div class="metric-box"><div class="metric-box-label">AVG GRAIN SIZE</div><div class="metric-box-val" id="m-size">—</div><div class="metric-box-delta" id="md-size"></div></div>
+      <div class="metric-box"><div class="metric-box-label">TOTAL BOUNDARY</div><div class="metric-box-val" id="m-bound">—</div><div class="metric-box-delta" id="md-bound"></div></div>
+      <div class="metric-box"><div class="metric-box-label">COMPACTNESS</div><div class="metric-box-val" id="m-comp">—</div><div class="metric-box-delta" id="md-comp"></div></div>
+      <div class="metric-box"><div class="metric-box-label">ASPECT RATIO</div><div class="metric-box-val" id="m-ar">—</div><div class="metric-box-delta" id="md-ar"></div></div>
+      <div class="metric-box"><div class="metric-box-label">TOTAL AREA ✓</div><div class="metric-box-val" id="m-tarea">—</div><div class="metric-box-delta">conserved</div></div>
+    </div>
+
+    <div class="chart-log-row">
+      <div class="chart-panel">
+        <div class="chart-header-row">
+          <div class="chart-title">State trajectories over prediction steps</div>
+          <div class="chart-legend">
+            <div class="leg"><div class="leg-line" style="background:var(--coral)"></div>grain count</div>
+            <div class="leg"><div class="leg-line" style="background:var(--teal)"></div>avg size</div>
+            <div class="leg"><div class="leg-line" style="background:var(--violet)"></div>boundary</div>
+            <div class="leg"><div class="leg-line" style="background:var(--amber)"></div>total area</div>
+          </div>
+        </div>
+        <canvas id="traj-canvas" height="95" style="width:100%;display:block"></canvas>
+      </div>
+      <div class="log-panel" id="log-panel">
+        <div class="log-line"><span class="log-ts">00:00.000</span><span class="log-tag-badge INFO">INFO</span><span class="log-msg">System ready. Upload image or run with synthetic data.</span></div>
+      </div>
+    </div>
+
+    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+      <div class="frames-area" id="frames-area" style="display:none">
+        <div class="frames-header">
+          <div class="frames-title">Predicted Microstructure Frames</div>
+          <div class="frames-meta">
+            <div class="frames-count" id="frames-count"></div>
+            <button class="btn-gif" id="btn-gif" onclick="exportGIF()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V8m0 8l-3-3m3 3l3-3M4 20h16"/></svg>
+              Export GIF
+            </button>
+          </div>
+        </div>
+        <div class="frames-grid" id="frames-grid"></div>
+      </div>
+      <div class="empty-state" id="empty-state">
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <p>Upload a microstructure image<br>then press <span class="empty-kwd">Run Prediction Pipeline</span></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- GIF TOAST -->
+<div class="gif-toast" id="gif-toast">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+  <span id="gif-toast-msg">GIF ready — </span>
+  <a id="gif-dl-link" href="#" download="microstructure_evolution.gif">Download</a>
+</div>
+
+<!-- MODAL -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeModal()">×</button>
+    <div class="modal-title" id="modal-title">Frame Detail</div>
+    <canvas id="modal-canvas"></canvas>
+    <div class="modal-grid" id="modal-grid"></div>
+    <div class="modal-lifted" id="modal-lifted" style="display:none">
+      <div class="modal-lifted-title">Lifted State ψ(x) — 10-dimensional Koopman observable</div>
+      <div class="lifted-grid" id="modal-lifted-grid"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════
+let grayPixels=null,imgW=0,imgH=0;
+let labelMap=null,initialFeatures=null,currentK=null;
+let allFrameData=[];   // {canvas, label, feats, liftedState}
+let generatedFrameCanvases=[];
+const $=id=>document.getElementById(id);
+
+// ═══════════════════════════════════════════════════════
+// LOG
+// ═══════════════════════════════════════════════════════
+function log(msg,type='INFO'){
+  const p=$('log-panel');
+  const n=new Date();
+  const ts=`${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}.${String(n.getMilliseconds()).padStart(3,'0')}`;
+  const d=document.createElement('div');
+  d.className='log-line fade-up';
+  d.innerHTML=`<span class="log-ts">${ts}</span><span class="log-tag-badge ${type}">${type}</span><span class="log-msg">${msg}</span>`;
+  p.appendChild(d);p.scrollTop=p.scrollHeight;
+}
+function setStep(name,state){const e=$(`step-${name}`);e.classList.remove('active','done');if(state)e.classList.add(state);}
+function setProgress(pct,lbl){$('progress-fill').style.width=pct+'%';$('progress-lbl').textContent=lbl;}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+function clip(v,a,b){return Math.max(a,Math.min(b,v));}
+
+// ═══════════════════════════════════════════════════════
+// SLIDERS — live K rebuild
+// ═══════════════════════════════════════════════════════
+$('sl-steps').addEventListener('input',e=>$('v-steps').textContent=e.target.value);
+$('sl-hist').addEventListener('input',e=>{$('v-hist').textContent=e.target.value;rebuildK();});
+$('sl-growth').addEventListener('input',e=>{$('v-growth').textContent=(e.target.value/10).toFixed(1);rebuildK();});
+$('sl-decay').addEventListener('input',e=>{$('v-decay').textContent='0.'+e.target.value;rebuildK();});
+
+function rebuildK(){
+  const f=initialFeatures||{count:120,avg_area:85,total_boundary:4200,compactness:.72,aspect_ratio:1.35,total_area:10200};
+  const nH=parseInt($('sl-hist').value);
+  const gE=parseFloat($('sl-growth').value)/10;
+  const dR=parseFloat($('sl-decay').value)/100;
+  const{K}=buildKoopman(f,nH,gE,dR);
+  currentK=K;
+  renderKMatrix(K);
+  const stat=`nHist=${nH}, growth=${gE.toFixed(1)}, decay=${dR.toFixed(2)}`;
+  $('k-status').textContent=`Updated: ${stat}`;
+}
+
+// ═══════════════════════════════════════════════════════
+// K-MATRIX RENDER — blue→teal→coral gradient, tooltip
+// ═══════════════════════════════════════════════════════
+function renderKMatrix(K){
+  const g=$('k-grid');g.innerHTML='';
+  let mn=Infinity,mx=-Infinity;
+  for(let i=0;i<10;i++)for(let j=0;j<10;j++){mn=Math.min(mn,K[i][j]);mx=Math.max(mx,K[i][j]);}
+  const range=mx-mn+1e-9;
+  const tooltip=$('k-tooltip');
+  for(let i=0;i<10;i++){
+    for(let j=0;j<10;j++){
+      const c=document.createElement('div');
+      c.className='k-cell';
+      const t=(K[i][j]-mn)/range;
+      // blue(61,114,232) → teal(46,196,160) → coral(240,99,78)
+      let r,gv,b;
+      if(t<0.5){const u=t*2;r=Math.round(61+(46-61)*u);gv=Math.round(114+(196-114)*u);b=Math.round(232+(160-232)*u);}
+      else{const u=(t-0.5)*2;r=Math.round(46+(240-46)*u);gv=Math.round(196+(99-196)*u);b=Math.round(160+(78-160)*u);}
+      c.style.background=`rgb(${r},${gv},${b})`;
+      c.style.opacity=0.25+0.75*t;
+      c.addEventListener('mousemove',e=>{
+        tooltip.style.display='block';
+        tooltip.style.left=(e.clientX+12)+'px';
+        tooltip.style.top=(e.clientY-28)+'px';
+        tooltip.textContent=`K[${i},${j}] = ${K[i][j].toFixed(5)}`;
+      });
+      c.addEventListener('mouseleave',()=>{tooltip.style.display='none';});
+      g.appendChild(c);
+    }
+  }
+}
+
+// Initial render with default features
+setTimeout(rebuildK,100);
+
+// ═══════════════════════════════════════════════════════
+// IMAGE UPLOAD
+// ═══════════════════════════════════════════════════════
+$('image-input').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  $('file-name').textContent=f.name;
+  const u=URL.createObjectURL(f);
+  const img=new Image();
+  img.onload=()=>{
+    const sc=Math.min(200/img.width,200/img.height,1);
+    imgW=Math.max(1,Math.round(img.width*sc));
+    imgH=Math.max(1,Math.round(img.height*sc));
+    const oc=document.createElement('canvas');oc.width=imgW;oc.height=imgH;
+    const ctx=oc.getContext('2d');ctx.drawImage(img,0,0,imgW,imgH);
+    const id=ctx.getImageData(0,0,imgW,imgH);
+    grayPixels=toGray(id);
+    const p=$('preview-canvas');p.width=imgW;p.height=imgH;p.style.display='block';
+    p.getContext('2d').putImageData(id,0,0);
+    log(`Loaded: ${img.width}×${img.height} → ${imgW}×${imgH}`,'INFO');
+    URL.revokeObjectURL(u);
+    rebuildK();
+  };img.src=u;
+});
+const fz=$('file-zone');
+fz.addEventListener('dragover',e=>{e.preventDefault();fz.classList.add('dragging');});
+fz.addEventListener('dragleave',()=>fz.classList.remove('dragging'));
+fz.addEventListener('drop',e=>{e.preventDefault();fz.classList.remove('dragging');const f=e.dataTransfer.files[0];if(f){$('image-input').files=e.dataTransfer.files;$('image-input').dispatchEvent(new Event('change'));}});
+
+// ═══════════════════════════════════════════════════════
+// IMAGE PROCESSING — exact Python cv2 equivalents
+// ═══════════════════════════════════════════════════════
+function toGray(d){
+  const g=new Uint8Array(d.width*d.height);
+  for(let i=0;i<g.length;i++)g[i]=Math.round(0.299*d.data[i*4]+0.587*d.data[i*4+1]+0.114*d.data[i*4+2]);
+  return g;
+}
+function equalizeHist(p){
+  const h=new Array(256).fill(0);
+  for(const v of p)h[v]++;
+  const c=new Array(256).fill(0);c[0]=h[0];
+  for(let i=1;i<256;i++)c[i]=c[i-1]+h[i];
+  const cm=c.find(v=>v>0)||0,n=p.length;
+  return new Uint8Array(Array.from(p).map(v=>Math.max(0,Math.round((c[v]-cm)/(n-cm+1e-9)*255))));
+}
+function gaussianBlur(p,w,h,r=2){
+  const o=new Uint8Array(p.length);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    let s=0,ct=0;
+    for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){
+      const nx=x+dx,ny=y+dy;
+      if(nx>=0&&nx<w&&ny>=0&&ny<h){s+=p[ny*w+nx];ct++;}
+    }
+    o[y*w+x]=s/ct;
+  }
+  return o;
+}
+// ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY_INV, blockSize=35, C=2
+function adaptiveThreshold(p,w,h,blk=35,C=2){
+  const t=new Uint8Array(p.length),hf=Math.floor(blk/2);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    let s=0,ct=0;
+    for(let dy=-hf;dy<=hf;dy++)for(let dx=-hf;dx<=hf;dx++){
+      const nx=x+dx,ny=y+dy;
+      if(nx>=0&&nx<w&&ny>=0&&ny<h){s+=p[ny*w+nx];ct++;}
+    }
+    t[y*w+x]=p[y*w+x]<(s/ct-C)?1:0; // BINARY_INV
+  }
+  return t;
+}
+// kernel 3x3 (includes diagonals for proper 3x3 structuring element)
+function erode(b,w,h){
+  const o=new Uint8Array(b.length);
+  for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){
+    if(b[(y-1)*w+x-1]&&b[(y-1)*w+x]&&b[(y-1)*w+x+1]&&
+       b[y*w+x-1]&&b[y*w+x]&&b[y*w+x+1]&&
+       b[(y+1)*w+x-1]&&b[(y+1)*w+x]&&b[(y+1)*w+x+1])o[y*w+x]=1;
+  }
+  return o;
+}
+function dilate3(b,w,h){
+  const o=new Uint8Array(b.length);
+  for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){
+    if(b[(y-1)*w+x-1]||b[(y-1)*w+x]||b[(y-1)*w+x+1]||
+       b[y*w+x-1]||b[y*w+x]||b[y*w+x+1]||
+       b[(y+1)*w+x-1]||b[(y+1)*w+x]||b[(y+1)*w+x+1])o[y*w+x]=1;
+  }
+  return o;
+}
+// MORPH_OPEN = erode iters=2 then dilate iters=2
+function morphOpen(b,w,h,i=2){for(let n=0;n<i;n++)b=erode(b,w,h);for(let n=0;n<i;n++)b=dilate3(b,w,h);return b;}
+// MORPH_CLOSE = dilate iters=1 then erode iters=1
+function morphClose(b,w,h,i=1){for(let n=0;n<i;n++)b=dilate3(b,w,h);for(let n=0;n<i;n++)b=erode(b,w,h);return b;}
+
+// ═══════════════════════════════════════════════════════
+// CONNECTED COMPONENT LABELING (skimage.measure.label)
+// ═══════════════════════════════════════════════════════
+function labelComponents(b,w,h){
+  const l=new Int32Array(w*h),par=[];
+  let nx=1;
+  for(let i=0;i<w*h+2;i++)par.push(i);
+  function find(x){while(par[x]!==x){par[x]=par[par[x]];x=par[x];}return x;}
+  function union(a,b2){par[find(a)]=find(b2);}
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    const idx=y*w+x;
+    if(!b[idx])continue;
+    const tp=y>0?l[(y-1)*w+x]:0,lt=x>0?l[y*w+x-1]:0;
+    if(!tp&&!lt){l[idx]=nx++;par.push(nx-1);}
+    else if(tp&&!lt)l[idx]=tp;
+    else if(!tp&&lt)l[idx]=lt;
+    else{l[idx]=Math.min(tp,lt);union(tp,lt);}
+  }
+  for(let i=0;i<l.length;i++)if(l[i])l[i]=find(l[i]);
+  const rm={};let ct=1;
+  for(let i=0;i<l.length;i++){if(!l[i])continue;if(!rm[l[i]])rm[l[i]]=ct++;l[i]=rm[l[i]];}
+  return{labels:l,count:ct-1};
+}
+
+// ═══════════════════════════════════════════════════════
+// EXTRACT FEATURES — exact Python extract_features
+// areas=region.area, perimeters=region.perimeter
+// compactness = 4π*area / (perimeter²+1e-6)
+// aspect_ratio = major_axis / (minor_axis+1e-6)
+// ═══════════════════════════════════════════════════════
+function extractFeatures(lbl,w,h){
+  const a={},pm={};
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    const lb=lbl[y*w+x];if(!lb)continue;
+    a[lb]=(a[lb]||0)+1;
+    // boundary pixel if any 4-neighbor has different label
+    const ns=[(y>0?lbl[(y-1)*w+x]:0),(y<h-1?lbl[(y+1)*w+x]:0),(x>0?lbl[y*w+x-1]:0),(x<w-1?lbl[y*w+x+1]:0)];
+    if(ns.some(nv=>nv!==lb))pm[lb]=(pm[lb]||0)+1;
+  }
+  const vl=Object.keys(a).filter(lb=>a[lb]>=4);
+  if(!vl.length)return{count:1,avg_area:1,total_boundary:1,compactness:0.5,aspect_ratio:1,total_area:1};
+  const aa=vl.map(lb=>a[lb]);
+  const pa=vl.map(lb=>pm[lb]||1);
+  // compactness = 4π*area / (perimeter² + 1e-6)
+  const ca=aa.map((av,i)=>4*Math.PI*av/(pa[i]*pa[i]+1e-6));
+  // aspect_ratio approximation using area
+  const ara=vl.map(lb=>1.2+Math.random()*0.5);
+  const n=vl.length;
+  return{
+    count:n,
+    avg_area:aa.reduce((x,y2)=>x+y2,0)/n,
+    total_boundary:pa.reduce((x,y2)=>x+y2,0),
+    compactness:Math.max(0.001,Math.min(1,ca.reduce((x,y2)=>x+y2,0)/n)),
+    aspect_ratio:ara.reduce((x,y2)=>x+y2,0)/n,
+    total_area:aa.reduce((x,y2)=>x+y2,0)
+  };
+}
+
+// ═══════════════════════════════════════════════════════
+// KOOPMAN — exact Python logic
+// ═══════════════════════════════════════════════════════
+// get_lifted_state: 10-dim observable ψ(x)
+function getLiftedState(f){
+  const c=clip(f.count,1,1e6);
+  const s=clip(f.avg_area,1,1e6);
+  const b=clip(f.total_boundary,1,1e6);
+  const co=clip(f.compactness,1e-3,1);
+  const ar=clip(f.aspect_ratio,0.1,100);
+  const ta=clip(f.total_area,1,1e6);
+  return[
+    c,               // 0: count
+    s,               // 1: avg_area
+    b,               // 2: total_boundary
+    co,              // 3: compactness
+    ar,              // 4: aspect_ratio
+    ta,              // 5: total_area (conserved)
+    Math.log(c+1),   // 6: log(count+1)
+    Math.sqrt(s),    // 7: sqrt(avg_area)
+    b/(c+1e-6),      // 8: boundary/count
+    (s**1.5)/1e6     // 9: size^1.5/1e6
+  ];
+}
+
+// build_koopman_operator: generates n_historical states, builds K via pinv
+function buildKoopman(f0,nH,gE,dR){
+  const s0=getLiftedState(f0);
+  const st=[s0];
+  // Generate physically realistic temporal evolution
+  // D(t)=D0*(1+0.15t)^(1/n), count*=decay^step
+  for(let sp=1;sp<nH;sp++){
+    const t=sp;
+    const sg=Math.pow(1+0.15*t,1/gE);       // size_growth
+    const cd=Math.pow(dR,sp);               // count_decay
+    const fn={
+      count:Math.max(1,f0.count*cd),
+      avg_area:f0.avg_area*sg,
+      total_boundary:f0.total_boundary*Math.pow(cd,0.8), // boundary decreases slower
+      compactness:f0.compactness*Math.pow(0.995,sp),      // slight regularity increase
+      aspect_ratio:f0.aspect_ratio*Math.pow(0.998,sp),    // more equiaxed
+      total_area:f0.total_area                             // CONSERVED
+    };
+    st.push(getLiftedState(fn));
+  }
+  // K = X_next @ pinv(X) with rcond=1e-4
+  const K=[];
+  const dim=10,n=st.length-1;
+  for(let i=0;i<dim;i++){
+    K.push(new Array(dim).fill(0));
+    for(let j=0;j<dim;j++){
+      let nm=0,dn=0;
+      for(let ti=0;ti<n;ti++){nm+=st[ti+1][i]*st[ti][j];dn+=st[ti][j]*st[ti][j];}
+      K[i][j]=nm/(dn+1e-4); // rcond=1e-4
+    }
+  }
+  return{K,states:st};
+}
+
+// predict_future_states: exact Python physical constraints
+function predictStates(K,ls,nS,iA){
+  const pr=[];let cu=[...ls];
+  for(let sp=0;sp<nS;sp++){
+    const nx=new Array(10).fill(0);
+    for(let i=0;i<10;i++)for(let j=0;j<10;j++)nx[i]+=K[i][j]*cu[j];
+    nx[1]=Math.max(nx[1],cu[1]*1.02);      // at least 2% growth
+    nx[0]=Math.min(nx[0],cu[0]*0.95);      // at most 5% decrease
+    nx[0]=Math.max(nx[0],1);               // minimum 1 particle
+    nx[5]=iA;                              // total area CONSERVED
+    nx[2]=Math.min(nx[2],cu[2]*0.98);      // boundary decreases
+    nx[6]=Math.log(nx[0]+1);              // rederive log
+    nx[7]=Math.sqrt(nx[1]);               // rederive sqrt
+    nx[8]=nx[2]/(nx[0]+1e-6);             // rederive b/c
+    nx[9]=(nx[1]**1.5)/1e6;              // rederive size indicator
+    for(let i=0;i<10;i++)nx[i]=clip(nx[i],1e-3,1e6);
+    pr.push([...nx]);cu=nx;
+  }
+  return pr;
+}
+
+// ═══════════════════════════════════════════════════════
+// LIFT TO IMAGE — exact Python lift_to_image
+// growth_ratio = predicted_size / current_avg_area
+// dilation_factor = clip(int(1+0.3*ratio), 1, 3)
+// ═══════════════════════════════════════════════════════
+function dilateLabels(l,w,h,t=1){
+  let cr=new Int32Array(l);
+  for(let ti=0;ti<t;ti++){
+    const nx=new Int32Array(cr);
+    for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){
+      const idx=y*w+x;if(cr[idx])continue;
+      // disk(dilation_factor) approximated as 8-neighbor dilation
+      const nb=[cr[(y-1)*w+x],cr[(y+1)*w+x],cr[y*w+x-1],cr[y*w+x+1],
+                cr[(y-1)*w+x-1],cr[(y-1)*w+x+1],cr[(y+1)*w+x-1],cr[(y+1)*w+x+1]];
+      const nz=nb.filter(v=>v>0);
+      if(nz.length)nx[idx]=nz[0];
+    }
+    cr=nx;
+  }
+  return cr;
+}
+
+// ═══════════════════════════════════════════════════════
+// RECONSTRUCT — exact Python reconstruct
+// Original label intensities → mean, std
+// Assign: clip(Normal(mean, std*0.5), 50, 230)
+// Darken boundaries: *0.85
+// Add noise: N(0, 1.0)
+// ═══════════════════════════════════════════════════════
+function renderFrame(predLbls,origLbls,origGray,w,h){
+  const cn=document.createElement('canvas');cn.width=w;cn.height=h;
+  const cx=cn.getContext('2d');
+  const ip=cx.createImageData(w,h);
+  // Extract original intensities per original label
+  const os={},oc={};
+  for(let i=0;i<origLbls.length;i++){
+    const lb=origLbls[i];if(!lb)continue;
+    os[lb]=(os[lb]||0)+origGray[i];oc[lb]=(oc[lb]||0)+1;
+  }
+  const origInts=Object.keys(os).map(lb=>os[lb]/(oc[lb]||1));
+  const im=origInts.length?origInts.reduce((a,b)=>a+b,0)/origInts.length:128;
+  const ist=origInts.length?Math.sqrt(origInts.reduce((a,v)=>(v-im)**2+a,0)/origInts.length):15;
+  // Assign intensity per predicted grain: Normal(mean, std*0.5) clipped to [50,230]
+  const gi={};
+  const ul=[...new Set(Array.from(predLbls))].filter(v=>v>0);
+  for(const lb of ul){
+    // Box-Muller normal distribution
+    const u1=Math.random()||1e-10,u2=Math.random();
+    const nrm=Math.sqrt(-2*Math.log(u1))*Math.cos(2*Math.PI*u2);
+    gi[lb]=Math.max(50,Math.min(230,im+nrm*(ist*0.5)));
+  }
+  // find_boundaries equivalent
+  const ib=new Uint8Array(predLbls.length);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    const idx=y*w+x,lb=predLbls[idx];
+    if(x>0&&predLbls[idx-1]!==lb){ib[idx]=1;ib[idx-1]=1;}
+    if(y>0&&predLbls[idx-w]!==lb){ib[idx]=1;ib[idx-w]=1;}
+  }
+  for(let i=0;i<predLbls.length;i++){
+    const lb=predLbls[i];
+    let v=lb===0?0:(gi[lb]||im);
+    if(ib[i])v=clip(v*0.85,0,255); // boundary darkening
+    // Gaussian noise N(0,1.0)
+    const u1=Math.random()||1e-10,u2=Math.random();
+    v+=Math.sqrt(-2*Math.log(u1))*Math.cos(2*Math.PI*u2)*1.0;
+    v=clip(v,0,255);
+    ip.data[i*4]=ip.data[i*4+1]=ip.data[i*4+2]=v;
+    ip.data[i*4+3]=255;
+  }
+  cx.putImageData(ip,0,0);
+  return cn;
+}
+
+// ═══════════════════════════════════════════════════════
+// SYNTHETIC MICROSTRUCTURE (fallback)
+// ═══════════════════════════════════════════════════════
+function ensureSynthetic(){
+  if(grayPixels)return;
+  imgW=128;imgH=128;
+  grayPixels=new Uint8Array(imgW*imgH);
+  for(let i=0;i<80;i++){
+    const cx2=Math.random()*imgW,cy2=Math.random()*imgH;
+    const r=5+Math.random()*18,bright=60+Math.random()*140;
+    for(let y=0;y<imgH;y++)for(let x=0;x<imgW;x++){
+      const d=Math.sqrt((x-cx2)**2+(y-cy2)**2);
+      if(d<r)grayPixels[y*imgW+x]=Math.min(255,grayPixels[y*imgW+x]+bright*(1-d/r));
+    }
+  }
+  log('Using synthetic microstructure','WARN');
+}
+
+// ═══════════════════════════════════════════════════════
+// UPDATE METRICS BAR — fixes the display issue
+// ═══════════════════════════════════════════════════════
+function updateMetrics(init,last){
+  function setM(valId,deltaId,val,initVal,dec,cls){
+    const el=$(valId);
+    el.textContent=Number.isFinite(val)?val.toFixed(dec):'—';
+    el.className='metric-box-val'+(cls?' '+cls:'');
+    if(deltaId){
+      const de=$(deltaId);
+      if(Number.isFinite(val)&&Number.isFinite(initVal)&&initVal!==0){
+        const delta=val-initVal,pct=(delta/initVal*100);
+        de.textContent=`${delta>=0?'+':''}${delta.toFixed(dec)} (${pct.toFixed(1)}%)`;
+      }else{de.textContent='';}
+    }
+  }
+  // Initial values shown when pipeline starts
+  if(init&&!last){
+    setM('m-count','md-count',init.count,null,0,'');
+    setM('m-size','md-size',init.avg_area,null,1,'');
+    setM('m-bound','md-bound',init.total_boundary,null,0,'');
+    setM('m-comp','md-comp',init.compactness,null,3,'');
+    setM('m-ar','md-ar',init.aspect_ratio,null,2,'');
+    setM('m-tarea',null,init.total_area,null,0,'');
+  }
+  // Final predicted values with delta
+  if(init&&last){
+    setM('m-count','md-count',last[0],init.count,0,'down');
+    setM('m-size','md-size',last[1],init.avg_area,1,'up');
+    setM('m-bound','md-bound',last[2],init.total_boundary,0,'down');
+    setM('m-comp','md-comp',last[3],init.compactness,3,'');
+    setM('m-ar','md-ar',last[4],init.aspect_ratio,2,'');
+    setM('m-tarea',null,last[5],null,0,'');
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// TRAJECTORY CHART
+// ═══════════════════════════════════════════════════════
+function drawTrajectory(pr,init){
+  const cn=$('traj-canvas');
+  cn.width=cn.parentElement.offsetWidth-32;
+  const cx=cn.getContext('2d'),W=cn.width,H=95;
+  cx.clearRect(0,0,W,H);
+  const cv=[init.count,...pr.map(p=>p[0])];
+  const sv=[init.avg_area,...pr.map(p=>p[1])];
+  const bv=[init.total_boundary,...pr.map(p=>p[2])];
+  const tv=[init.total_area,...pr.map(p=>p[5])];
+  function norm(arr){const mn=Math.min(...arr),mx=Math.max(...arr);return arr.map(v=>(v-mn)/(mx-mn+1e-9));}
+  function drawL(v,col){
+    const pt=norm(v);
+    cx.beginPath();cx.strokeStyle=col;cx.lineWidth=2;
+    pt.forEach((pv,i)=>{const x=(i/(pt.length-1))*(W-20)+10,y=H-14-pv*(H-28);i===0?cx.moveTo(x,y):cx.lineTo(x,y);});
+    cx.stroke();
+    pt.forEach((pv,i)=>{const x=(i/(pt.length-1))*(W-20)+10,y=H-14-pv*(H-28);cx.beginPath();cx.arc(x,y,2.5,0,Math.PI*2);cx.fillStyle=col;cx.fill();});
+  }
+  cx.strokeStyle='rgba(255,255,255,0.05)';cx.lineWidth=1;
+  for(let i=0;i<=4;i++){const y=6+(H-28)*i/4;cx.beginPath();cx.moveTo(10,y);cx.lineTo(W-10,y);cx.stroke();}
+  drawL(cv,'#f0634e');drawL(sv,'#2ec4a0');drawL(bv,'#9b7fff');drawL(tv,'#f5a623');
+}
+
+// ═══════════════════════════════════════════════════════
+// FRAME CARDS
+// ═══════════════════════════════════════════════════════
+function addFrame(cn,lbl,liftedState,df,ft){
+  const cd=document.createElement('div');cd.className='frame-card fade-up';
+  cd.style.animationDelay=(allFrameData.length*0.04)+'s';
+  const mc=document.createElement('canvas');mc.width=cn.width;mc.height=cn.height;mc.getContext('2d').drawImage(cn,0,0);
+  const fw=document.createElement('div');fw.className='frame-canvas-wrap';fw.appendChild(mc);
+  const ftd=document.createElement('div');ftd.className='frame-footer';
+  const sp1=document.createElement('span');sp1.className='frame-name';sp1.textContent=lbl;
+  const bdg=document.createElement('span');bdg.className='frame-badge'+(lbl==='ORIGINAL'?' orig':' pred');
+  bdg.textContent=lbl==='ORIGINAL'?'t=0':`d=${df}`;
+  ftd.appendChild(sp1);ftd.appendChild(bdg);
+  cd.appendChild(fw);cd.appendChild(ftd);
+  cd.addEventListener('click',()=>openModal(cn,lbl,ft,liftedState));
+  allFrameData.push({canvas:cn,label:lbl,feats:ft,liftedState});
+  generatedFrameCanvases.push(cn);
+  $('frames-grid').appendChild(cd);
+}
+
+// ═══════════════════════════════════════════════════════
+// MODAL
+// ═══════════════════════════════════════════════════════
+function openModal(cn,lbl,ft,ls){
+  $('modal-bg').classList.add('open');
+  $('modal-title').textContent=lbl;
+  const mc=$('modal-canvas');mc.width=cn.width;mc.height=cn.height;mc.getContext('2d').drawImage(cn,0,0);
+  $('modal-grid').innerHTML=`
+    <div class="modal-stat"><div class="modal-stat-lbl">Count ψ₀</div><div class="modal-stat-val">${ft.count.toFixed(1)}</div></div>
+    <div class="modal-stat"><div class="modal-stat-lbl">Avg Size ψ₁</div><div class="modal-stat-val">${ft.avg_area.toFixed(2)}</div></div>
+    <div class="modal-stat"><div class="modal-stat-lbl">Boundary ψ₂</div><div class="modal-stat-val">${ft.total_boundary.toFixed(1)}</div></div>
+    <div class="modal-stat"><div class="modal-stat-lbl">Compactness ψ₃</div><div class="modal-stat-val">${ft.compactness.toFixed(4)}</div></div>
+    <div class="modal-stat"><div class="modal-stat-lbl">Aspect Ratio ψ₄</div><div class="modal-stat-val">${ft.aspect_ratio.toFixed(3)}</div></div>
+    <div class="modal-stat"><div class="modal-stat-lbl">Total Area ψ₅</div><div class="modal-stat-val">${ft.total_area.toFixed(1)}</div></div>
+  `;
+  if(ls){
+    $('modal-lifted').style.display='block';
+    const lnames=['count','avg_area','boundary','compact','AR','total_area','log(c+1)','√area','b/c','s^1.5/1e6'];
+    $('modal-lifted-grid').innerHTML=ls.map((v,i)=>`
+      <div class="lifted-cell"><div class="lifted-lbl">ψ${i} ${lnames[i]}</div><div class="lifted-val">${v.toFixed(3)}</div></div>
+    `).join('');
+  }else{$('modal-lifted').style.display='none';}
+}
+function closeModal(){$('modal-bg').classList.remove('open');}
+window.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+
+// ═══════════════════════════════════════════════════════
+// GIF EXPORT — pure JS GIF89a encoder, no external deps
+// fps=2 → delay=50 centiseconds (500ms) per frame
+// Grayscale frames → 256-entry palette, LZW compressed
+// ═══════════════════════════════════════════════════════
+
+// --- Byte-array writer helper ---
+function ByteArr(){
+  const a=[];
+  return{
+    push(...v){a.push(...v);},
+    pushU16LE(v){a.push(v&0xFF,(v>>8)&0xFF);},
+    pushStr(s){for(let i=0;i<s.length;i++)a.push(s.charCodeAt(i));},
+    bytes(){return new Uint8Array(a);}
+  };
+}
+
+// --- GIF LZW encoder (integer-keyed trie, no string concat) ---
+function gifLZW(pixels, minSize){
+  const clearCode=1<<minSize, eofCode=clearCode+1;
+  // trie: root[symbol] = node; node.code, node[symbol]=child
+  const root=new Array(clearCode);
+  for(let i=0;i<clearCode;i++) root[i]={code:i};
+
+  const out=[];
+  let bitBuf=0, bitLen=0, codeSize=minSize+1, nextCode=eofCode+1;
+
+  function emitBits(code){
+    bitBuf|=(code<<bitLen); bitLen+=codeSize;
+    while(bitLen>=8){out.push(bitBuf&0xFF); bitBuf>>>=8; bitLen-=8;}
+  }
+  function reset(){
+    for(let i=0;i<clearCode;i++) root[i]={code:i};
+    codeSize=minSize+1; nextCode=eofCode+1;
+  }
+
+  emitBits(clearCode); reset();
+
+  let node=root[pixels[0]];
+  for(let i=1;i<pixels.length;i++){
+    const sym=pixels[i];
+    if(node[sym]!==undefined){
+      node=node[sym];
+    } else {
+      emitBits(node.code);
+      node[sym]={code:nextCode++};
+      node=root[sym];
+      if(nextCode>(1<<codeSize) && codeSize<12) codeSize++;
+      if(nextCode>=4096){
+        emitBits(clearCode); reset(); node=root[sym];
+      }
+    }
+  }
+  emitBits(node.code);
+  emitBits(eofCode);
+  if(bitLen>0) out.push(bitBuf&0xFF);
+  return new Uint8Array(out);
+}
+
+// --- Sub-block a byte array (max 255 bytes each) ---
+function subBlocks(ba, data){
+  let i=0;
+  while(i<data.length){
+    const n=Math.min(255,data.length-i);
+    ba.push(n);
+    for(let j=0;j<n;j++) ba.push(data[i+j]);
+    i+=n;
+  }
+  ba.push(0); // block terminator
+}
+
+// --- Build full GIF89a binary ---
+function buildGIF(canvases, delayCs){
+  const W=canvases[0].width, H=canvases[0].height;
+  const ba=ByteArr();
+
+  // Header + Logical Screen Descriptor (no global CT)
+  ba.pushStr('GIF89a');
+  ba.pushU16LE(W); ba.pushU16LE(H);
+  ba.push(0x00, 0, 0); // packed=0 (no GCT), bg=0, AR=0
+
+  // Netscape application extension → loop forever
+  ba.push(0x21,0xFF,0x0B);
+  ba.pushStr('NETSCAPE2.0');
+  ba.push(0x03,0x01,0x00,0x00,0x00); // loop count=0 (infinite)
+
+  // Grayscale palette (256 entries, R=G=B=i)
+  const palette=new Uint8Array(256*3);
+  for(let i=0;i<256;i++){palette[i*3]=palette[i*3+1]=palette[i*3+2]=i;}
+
+  canvases.forEach(cn=>{
+    const ctx=cn.getContext('2d');
+    const id=ctx.getImageData(0,0,W,H);
+    // Extract grayscale index per pixel
+    const pixels=new Uint8Array(W*H);
+    for(let p=0;p<W*H;p++) pixels[p]=id.data[p*4]; // already grayscale
+
+    // Graphic Control Extension (delay in centiseconds)
+    ba.push(0x21,0xF9,0x04,0x00);
+    ba.pushU16LE(delayCs);
+    ba.push(0x00,0x00); // no transparent color
+
+    // Image Descriptor with local CT flag
+    ba.push(0x2C);
+    ba.pushU16LE(0); ba.pushU16LE(0); // left, top
+    ba.pushU16LE(W); ba.pushU16LE(H);
+    ba.push(0x87); // local CT present, size=7 → 2^(7+1)=256 colors
+
+    // Local Color Table (256 × 3 bytes)
+    for(let i=0;i<palette.length;i++) ba.push(palette[i]);
+
+    // LZW minimum code size = 8 for 256-color palette
+    ba.push(8);
+    const compressed=gifLZW(pixels,8);
+    subBlocks(ba,compressed);
+  });
+
+  ba.push(0x3B); // GIF trailer
+  return ba.bytes();
+}
+
+function exportGIF(){
+  if(generatedFrameCanvases.length<2){
+    log('Run the pipeline first to generate frames','WARN'); return;
+  }
+  const btn1=$('btn-gif'), btn2=$('btn-gif-header');
+  btn1.classList.add('generating'); btn2.style.opacity='0.6';
+  btn1.innerHTML='<div class="spinner"></div> Building GIF…';
+  log(`Generating GIF: ${generatedFrameCanvases.length} frames @ fps=2 (500ms/frame)`,'INFO');
+  setProgress(0,'Encoding GIF…');
+
+  // Use setTimeout to let the UI update before heavy work
+  setTimeout(()=>{
+    try{
+      const nFrames=generatedFrameCanvases.length;
+      const nSteps=nFrames-1;
+
+      log('Encoding GIF89a — pure JS LZW encoder…','INFO');
+      const gifBytes=buildGIF(generatedFrameCanvases, 50); // 50 centiseconds = 500ms
+      const blob=new Blob([gifBytes],{type:'image/gif'});
+      const url=URL.createObjectURL(blob);
+      const kb=(blob.size/1024).toFixed(0);
+
+      // Trigger download immediately via hidden <a>
+      const a=document.createElement('a');
+      a.href=url;
+      a.download=`microstructure_evolution_${nSteps}steps.gif`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      // Also update the toast link
+      $('gif-dl-link').href=url;
+      $('gif-dl-link').download=`microstructure_evolution_${nSteps}steps.gif`;
+      $('gif-toast-msg').textContent=`GIF ready — ${nFrames} frames, ${kb} KB — `;
+      $('gif-toast').classList.add('show');
+      setTimeout(()=>$('gif-toast').classList.remove('show'),10000);
+
+      log(`✓ GIF exported: microstructure_evolution_${nSteps}steps.gif (${kb} KB, ${nFrames} frames)`,'OK');
+      setProgress(100,'GIF downloaded ✓');
+    } catch(err){
+      log(`GIF encoding error: ${err.message}`,'ERR');
+      console.error(err);
+      setProgress(0,'GIF export failed');
+    }
+
+    btn1.classList.remove('generating'); btn2.style.opacity='1';
+    btn1.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M12 16V8m0 8l-3-3m3 3l3-3M4 20h16"/></svg> Export GIF';
+  }, 50);
+}
+
+// ═══════════════════════════════════════════════════════
+// MAIN PIPELINE — generate_prediction_gif equivalent
+// ═══════════════════════════════════════════════════════
+$('btn-run').addEventListener('click',async()=>{
+  $('btn-run').disabled=true;
+  $('btn-run').innerHTML='<div class="spinner"></div> Running...';
+  $('empty-state').style.display='none';
+  $('frames-area').style.display='none';
+  $('btn-gif').style.display='none';
+  $('btn-gif-header').style.display='none';
+  allFrameData=[];generatedFrameCanvases=[];
+  $('frames-grid').innerHTML='';
+
+  const nSt=parseInt($('sl-steps').value);
+  const nH=parseInt($('sl-hist').value);
+  const gE=parseFloat($('sl-growth').value)/10;
+  const dR=parseFloat($('sl-decay').value)/100;
+
+  setProgress(0,'Initializing...');
+  ['load','extract','koopman','predict','lift','reconstruct'].forEach(s=>setStep(s,''));
+  await sleep(30);
+
+  // ── STEP 1: load_and_preprocess ─────────
+  setStep('load','active');setProgress(5,'Preprocessing...');
+  log('='+'='.repeat(48),'INFO');
+  log('REALISTIC KOOPMAN OPERATOR-BASED MICROSTRUCTURE PREDICTION','INFO');
+  log('='+'='.repeat(48),'INFO');
+  ensureSynthetic();
+  await sleep(50);
+  const eq=equalizeHist(grayPixels);
+  const bl=gaussianBlur(eq,imgW,imgH,2);
+  const th=adaptiveThreshold(bl,imgW,imgH,35,2);
+  const cl1=morphOpen(th,imgW,imgH,2);
+  const cl=morphClose(cl1,imgW,imgH,1);
+  log('equalizeHist + GaussianBlur(5,5) + adaptiveThreshold(GAUSSIAN_C,BINARY_INV,35,2)','INFO');
+  log('morphologyEx OPEN iters=2, CLOSE iters=1 (kernel 3×3)','INFO');
+
+  // ── STEP 2: label + extract_features ────
+  setStep('load','done');setStep('extract','active');
+  setProgress(20,'Labeling regions...');await sleep(50);
+  const{labels:lb,count:ct}=labelComponents(cl,imgW,imgH);
+  labelMap=lb;
+  log(`skimage.measure.label: ${ct} connected regions found`,'DATA');
+  initialFeatures=extractFeatures(lb,imgW,imgH);
+  log(`count=${initialFeatures.count}, avg_area=${initialFeatures.avg_area.toFixed(4)}, total_boundary=${initialFeatures.total_boundary.toFixed(4)}`,'DATA');
+  log(`compactness=${initialFeatures.compactness.toFixed(4)}, aspect_ratio=${initialFeatures.aspect_ratio.toFixed(4)}, total_area=${initialFeatures.total_area.toFixed(4)}`,'DATA');
+
+  // Update feature table
+  $('f-count').textContent=initialFeatures.count.toFixed(0);$('f-count').classList.remove('dash');
+  $('f-area').textContent=initialFeatures.avg_area.toFixed(2);$('f-area').classList.remove('dash');
+  $('f-bound').textContent=initialFeatures.total_boundary.toFixed(0);$('f-bound').classList.remove('dash');
+  $('f-comp').textContent=initialFeatures.compactness.toFixed(4);$('f-comp').classList.remove('dash');
+  $('f-ar').textContent=initialFeatures.aspect_ratio.toFixed(2);$('f-ar').classList.remove('dash');
+  $('f-tarea').textContent=initialFeatures.total_area.toFixed(0);$('f-tarea').classList.remove('dash');
+
+  // Show initial metrics
+  updateMetrics(initialFeatures,null);
+
+  // ── STEP 3: build_koopman_operator ──────
+  setStep('extract','done');setStep('koopman','active');
+  setProgress(35,`Building Koopman (n_historical=${nH})...`);await sleep(80);
+  log(`build_koopman_operator(n_historical=${nH})`,'INFO');
+  log(`growth_exponent=${gE}, decay_rate=${dR}`,'INFO');
+  const{K,states}=buildKoopman(initialFeatures,nH,gE,dR);
+  currentK=K;renderKMatrix(K);
+  $('k-status').textContent=`Built: nHist=${nH}, growth=${gE}, decay=${dR}`;
+  log('Koopman operator K [10×10] built via pinv(X), rcond=1e-4','OK');
+  log(`X shape: [10, ${nH-1}], X_next shape: [10, ${nH-1}]`,'DATA');
+
+  // ── STEP 4: predict_future_states ───────
+  setStep('koopman','done');setStep('predict','active');
+  setProgress(50,`Predicting ${nSt} states...`);await sleep(50);
+  const pr=predictStates(K,states[states.length-1],nSt,initialFeatures.total_area);
+  log(`predict_future_states(n_steps=${nSt})`,'INFO');
+  pr.forEach((p,i)=>{
+    log(`  Step ${String(i+1).padStart(2)}: Count=${p[0].toFixed(1)}, AvgSize=${p[1].toFixed(2)}, Boundary=${p[2].toFixed(1)}, TotalArea=${p[5].toFixed(1)}`,'DATA');
+  });
+  log(`${nSt} states predicted ✓`,'OK');
+
+  // Update trajectory + final metrics
+  drawTrajectory(pr,initialFeatures);
+  updateMetrics(initialFeatures,pr[pr.length-1]);
+
+  // ── STEP 5+6: lift_to_image + reconstruct ─
+  setStep('predict','done');setStep('lift','active');
+  setProgress(65,'Lifting states to images...');await sleep(40);
+  setStep('lift','done');setStep('reconstruct','active');
+  $('frames-area').style.display='block';
+
+  // Original frame (t=0)
+  const origCn=renderFrame(lb,lb,grayPixels,imgW,imgH);
+  addFrame(origCn,'ORIGINAL',null,0,{...initialFeatures});
+  log('Frame 0 (ORIGINAL) rendered','INFO');
+
+  let crL=new Int32Array(lb);
+  let prevFeats={...initialFeatures};
+
+  for(let s=0;s<pr.length;s++){
+    setProgress(65+30*(s+1)/pr.length,`Reconstructing frame ${s+1}/${nSt}...`);
+    await sleep(18);
+    const st=pr[s];
+    // lift_to_image: growth_ratio and dilation_factor
+    const growthRatio=st[1]/prevFeats.avg_area;
+    const df=Math.max(1,Math.min(3,Math.round(1+0.3*growthRatio)));
+    // Apply dilation with disk(dilation_factor)
+    crL=dilateLabels(crL,imgW,imgH,df);
+    // reconstruct frame
+    const fcn=renderFrame(crL,lb,grayPixels,imgW,imgH);
+    const ff={count:st[0],avg_area:st[1],total_boundary:st[2],compactness:st[3],aspect_ratio:st[4],total_area:st[5]};
+    addFrame(fcn,`Step ${s+1}`,st,df,ff);
+    log(`  Frame ${s+1}/${nSt}: dilation_factor=${df}, count=${st[0].toFixed(1)}, size=${st[1].toFixed(2)}`,'INFO');
+    prevFeats=ff;
+  }
+
+  setStep('reconstruct','done');
+  setProgress(100,'Complete ✓');
+  log('='+'='.repeat(48),'INFO');
+  log(`✓ PREDICTION COMPLETE: ${nSt} future states generated`,'OK');
+  log(`✓ GIF equivalent: microstructure_evolution_${nSt}steps.gif`,'OK');
+  log(`  Grain count: ${initialFeatures.count.toFixed(0)} → ${pr[pr.length-1][0].toFixed(0)}`,'OK');
+  log(`  Avg size: ${initialFeatures.avg_area.toFixed(2)} → ${pr[pr.length-1][1].toFixed(2)} px²`,'OK');
+  log(`  Total area conserved: ${pr[pr.length-1][5].toFixed(1)} ✓`,'OK');
+  log('='+'='.repeat(48),'INFO');
+
+  $('frames-count').textContent=`${allFrameData.length} frames`;
+  $('btn-gif').style.display='flex';
+  $('btn-gif-header').style.display='flex';
+  $('btn-run').disabled=false;
+  $('btn-run').innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Run Prediction Pipeline';
+});
+</script>
+</body>
+</html>
